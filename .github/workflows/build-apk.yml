@@ -1,0 +1,55 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Unzip project files
+        run: |
+          unzip -o "*.zip"
+          if [ ! -f "package.json" ]; then
+            SUBDIR=$(find . -maxdepth 2 -name "package.json" -printf "%h\n" | head -n 1)
+            cp -r "$SUBDIR"/* .
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install & Build Web App
+        run: |
+          npm install
+          npm run build
+
+      - name: Setup Capacitor & Android
+        run: |
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init "Dev AI" "com.devai.app" --web-dir=dist
+          npx cap add android
+          sed -i 's|<application|<uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <application|' android/app/src/main/AndroidManifest.xml
+          npx cap sync
+
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DevAI-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
